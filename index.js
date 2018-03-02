@@ -113,7 +113,6 @@ class Mongo extends Service {
       });
       url += `${config.host}:${config.port}`;
     }
-    url += `/${config.db}`;
     Object.assign(infoObj, {
       db: config.db,
       options,
@@ -123,7 +122,7 @@ class Mongo extends Service {
     this.emitInfo('connecting', `Connecting in ${infoObj.mode} mode`, infoObj);
 
     return MongoClient.connect(url, options).then(client => {
-      this.client = client;
+      this.client = client.db(config.db);
       this.connected = true;
       const message = 'Successfully connected';
       this.log.info(message);
