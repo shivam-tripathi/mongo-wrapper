@@ -1,62 +1,30 @@
 
-
 const { MongoClient, Logger: mLogger } = require('mongodb');
-const Service = require('@akshendra/service');
-const misc = require('@akshendra/misc');
-const { validate, joi } = require('@akshendra/validator');
-
-const { is } = misc;
 
 /**
  * @class Mongo
  */
-class Mongo extends Service {
+class Mongo {
   /**
    * @param {string} name - unique name to this service
    * @param {EventEmitter} emitter
    * @param {Object} config - configuration object of service
    */
   constructor(name, emitter, config) {
-    super(name, emitter);
-
+    this.name = name;
+    this.emitter = emitter;
     this.client = null;
-    this.config = validate(config, joi.object().keys({
-      host: joi.string().default('127.0.0.1'),
-      port: joi.number().integer().min(0).default(27017),
-      db: joi.string().default('test'),
-      replica: joi.object().keys({
-        use: joi.bool().default(true),
-        servers: joi.array().items(joi.object().keys({
-          host: joi.string().default('127.0.0.1'),
-          port: joi.number().integer().min(0).default(27017),
-        })),
-        name: joi.string().default('test'),
-      }).default({
+    this.config = Object.assign({
+      host: 'localhost',
+      port: 27017,
+    }, config, {
+      auth: Object.assign({
         use: false,
-      }),
-      auth: joi.object().keys({
-        use: joi.bool().default(true),
-        username: joi.string().default('admin'),
-        password: joi.string().default('pass'),
-        authSource: joi.string().default('admin'),
-      }).default({
+      }, config.auth),
+      replica: Object.assign({
         use: false,
-      }),
-      options: joi.object().keys({
-        keepAlive: joi.number().integer().default(1000),
-        autoReconnect: joi.bool().default(true),
-        poolSize: joi.number().integer().default(5),
-        connectTimeoutMS: joi.number().integer().default(30000),
-        socketTimeoutMS: joi.number().integer().default(30000),
-        connectWithNoPrimary: joi.number().integer().default(false),
-        readPreference: joi.string().valid([
-          'primary',
-          'primaryPreferred',
-          'secondary',
-          'secondaryPreferred',
-          'nearest',
-        ]).default('primary'),
-      }).default({
+      }, config.replica),
+      options: Object.assign({
         keepAlive: 1000,
         autoReconnect: true,
         poolSize: 5,
@@ -64,8 +32,30 @@ class Mongo extends Service {
         socketTimeoutMS: 30000,
         connectWithNoPrimary: false,
         readPreference: 'secondaryPreferred',
-      }),
-    }));
+      }, config.options)
+    });
+  }
+
+  log(message, data) {
+    this.emitter.emit('log', {
+      service: this.name,
+      message,
+      data,
+    });
+  }
+
+  success(message, data) {
+    this.emitter.emit('success', {
+      service: this.name, message, data,
+    });
+  }
+
+  error(err, data) {
+    this.emitter.emit('error', {
+      service: this.name,
+      data,
+      err,
+    });
   }
 
 
@@ -76,7 +66,7 @@ class Mongo extends Service {
     const { config } = this;
     const { auth, options, replica } = config;
 
-    if (is.not.null(this.client)) {
+    if (this.client) {
       return Promise.resolve(this);
     }
 
@@ -118,18 +108,16 @@ class Mongo extends Service {
       options,
     });
 
-    this.log.info('Connecting to url', url);
-    this.emitInfo('connecting', `Connecting in ${infoObj.mode} mode`, infoObj);
+    this.log(`Connecting in ${infoObj.mode} mode`, infoObj);
 
     return MongoClient.connect(url, options).then(client => {
       this.client = client.db(config.db);
       this.connected = true;
       const message = 'Successfully connected';
-      this.log.info(message);
-      this.emitSuccess(`Successfully connected in ${infoObj.mode} mode`);
+      this.success(`Successfully connected in ${infoObj.mode} mode`);
       mLogger.setLevel('info');
       mLogger.setCurrentLogger((msg, context) => {
-        this.emitInfo('event', msg, context);
+        this.log(msg, context);
       });
       return this;
     });
