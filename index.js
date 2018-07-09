@@ -1,5 +1,5 @@
 
-const { MongoClient, Logger: mLogger } = require('mongodb');
+const { MongoClient, Logger: mLogger, ObjectId } = require('mongodb');
 
 /**
  * @class Mongo
@@ -122,112 +122,23 @@ class Mongo {
       return this;
     });
   }
-
-  collection(name) {
-    return this.client.collection(name);
-  }
-
-  mapIds(ids) { // eslint-disable-line
-    return ids.map(misc.castToObjectId.bind(misc));
-  }
-
-  idQuery(id) { // eslint-disable-line
-    return {
-      _id: misc.castToObjectId(id),
-    };
-  }
-
-  inQuery(ids) {
-    return {
-      _id: {
-        $in: this.mapIds(ids),
-      },
-    };
-  }
-
-  checkItem(model, item, id, throws) { // eslint-disable-line
-    if (throws === true && (is.not.existy(item) || is.empty(item))) {
-      throw ReferenceError(`${model} not find ${id},`);
-    }
-    return item;
-  }
-
-  getOneById(col, id) {
-    return this.collection(col).findOne(this.idQuery(id));
-  }
-
-  getOne(col, query) {
-    return this.collection(col).findOne(query);
-  }
-
-  getManyByIds(col, ids) {
-    return this.collection(col).find(this.inQuery(ids)).toArray();
-  }
-
-  getMany(col, query) {
-    return this.collection(col).find(query).toArray();
-  }
-
-  insertOne(col, doc) {
-    return this.collection(col).insert(doc);
-  }
-
-  upsertOne(col, query, doc) {
-    return this.collection(col).updateOne(query, {
-      $set: doc,
-    }, { upsert: true });
-  }
-
-  // insert an array of docs
-  insertMany(col, docs) {
-    return this.collection(col).insertMany(docs);
-  }
-
-  updateOrUpsertMany(col, docs) {
-    const bulk = this.collection(col).initializeUnorderedBulkOp();
-    docs.forEach((doc) => {
-      bulk.find({ _id: doc._id }).upsert().updateOne({ $set: doc });
-    });
-    if (docs.length > 0) {
-      return bulk.execute()
-        .catch((ex) => {
-          if (ex.message.indexOf('E11000 duplicate key error collection') !== -1) {
-            return this.updateOrUpsertMany(col, docs);
-          }
-          throw ex;
-        });
-    }
-    const error = new Error('Noting to insert');
-    return Promise.reject(error);
-  }
-
-  doesExist(col, id) {
-    const query = {
-      _id: misc.castToObjectId(id),
-    };
-    return this.collection(col).findOne(query)
-      .then((doc) => {
-        if (is.not.existy(doc) || is.empty(doc)) {
-          return false;
-        }
-        return true;
-      });
-  }
-
-  setOfExistence(col, ids) {
-    return this.getManyByIds(col, ids)
-      .then((docs) => {
-        const set = new Set();
-        docs.forEach((doc) => {
-          set.add(String(doc._id));
-        });
-        return set;
-      });
-  }
-
-  cursor(col) {
-    return this.collection(col).find({});
-  }
 }
 
-module.exports = Mongo;
+function isValidObjectId(value) {
+  const regex = /[0-9a-f]{24}/;
+  const matched = String(value).match(regex);
+  if (!matched) {
+    return false;
+  }
+
+  return ObjectId.isValid(value);
+}
+
+function castToObjectId(value) {
+  if (isValidObjectId(value) === false) {
+    throw new TypeError(`Value passed is not valid objectId, is [ ${value} ]`);
+  }
+  return ObjectId.createFromHexString(value);
+}
+
+module.exports = { Mongo, ObjectId, isValidObjectId, castToObjectId };

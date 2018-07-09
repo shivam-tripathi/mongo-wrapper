@@ -1,6 +1,6 @@
 
 const { EventEmitter } = require('events');
-const Mongo = require('./index.js');
+const { Mongo } = require('./index.js');
 
 const emitter = new EventEmitter();
 emitter.on('error', console.log.bind(console));
