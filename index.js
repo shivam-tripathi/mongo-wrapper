@@ -113,7 +113,6 @@ class Mongo {
     return MongoClient.connect(url, options).then(client => {
       this.client = client.db(config.db);
       this.connected = true;
-      const message = 'Successfully connected';
       this.success(`Successfully connected in ${infoObj.mode} mode`);
       mLogger.setLevel('info');
       mLogger.setCurrentLogger((msg, context) => {

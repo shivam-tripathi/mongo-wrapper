@@ -1,6 +1,6 @@
 {
   "name": "@akshendra/mongo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A simple wrapper around mongo native nodejs",
   "main": "index.js",
   "scripts": {
@@ -18,6 +18,6 @@
   "author": "Akshendra Pratap Singh",
   "license": "ISC",
   "dependencies": {
-    "mongodb": "^3.0.3"
+    "mongodb": "3.6.3"
   }
 }
