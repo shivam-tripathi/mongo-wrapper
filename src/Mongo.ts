@@ -53,7 +53,6 @@ class MongoConnect implements Mongo {
     this.userConfig = userConfig;
     this.config = {
       keepAlive: true,
-      autoReconnect: true,
       poolSize: 5,
       connectTimeoutMS: 30000,
       socketTimeoutMS: 30000,
