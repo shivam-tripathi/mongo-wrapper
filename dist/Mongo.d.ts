@@ -75,4 +75,4 @@ declare class ShardMongo extends MongoConnect {
 }
 export declare function isValidObjectId(value: string | number | ObjectId): boolean;
 export declare function castToObjectId(value: string): ObjectId;
-export { ObjectId } from 'mongodb';
+export { ObjectId } from "mongodb";

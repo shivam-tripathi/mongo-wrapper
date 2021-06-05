@@ -1,5 +1,12 @@
 import events from "events";
-import { Db, MongoClient, MongoClientOptions, Logger as MongoLogger, ObjectId } from "mongodb";
+import {
+  Db,
+  MongoClient,
+  MongoClientOptions,
+  Logger as MongoLogger,
+  ObjectId,
+  ReadPreference,
+} from "mongodb";
 
 export interface Server {
   host: string;
@@ -39,13 +46,26 @@ class MongoConnect implements Mongo {
     name: string,
     emitter: events.EventEmitter,
     userConfig: UserConfig,
-    mode: string,
+    mode: string
   ) {
     this.name = name;
     this.emitter = emitter;
     this.userConfig = userConfig;
+    this.config = {
+      keepAlive: true,
+      autoReconnect: true,
+      poolSize: 5,
+      connectTimeoutMS: 30000,
+      socketTimeoutMS: 30000,
+      useUnifiedTopology: true,
+      connectWithNoPrimary: false,
+      readPreference: ReadPreference.SECONDARY,
+    };
     if (userConfig.auth) {
-      this.config.auth = { user: userConfig.auth.username, password: userConfig.auth.password };
+      this.config.auth = {
+        user: userConfig.auth.username,
+        password: userConfig.auth.password,
+      };
       this.config.authSource = userConfig.auth.authSource;
     }
     this.mode = mode;
@@ -76,11 +96,11 @@ class MongoConnect implements Mongo {
   }
 
   private async getConnectionUrl() {
-    const { username, password } = this.userConfig.auth;
     const servers = await this.userConfig.getServers();
     const joiner = ["mongodb://"];
 
-    if (username && password) {
+    if (this.userConfig.auth) {
+      const { username, password } = this.userConfig.auth;
       joiner.push(`${username}:${password}@`);
     }
 
@@ -145,13 +165,10 @@ export function MongoFactory(
   config: StandaloneConfig | ReplicaConfig | ShardConfig
 ) {
   switch (mode) {
-    case MODES.STANDALONE: {
+    case MODES.STANDALONE:
       return new StandaloneMongo(name, emitter, config as StandaloneConfig);
-    }
-    case MODES.PSA: {
-      const { db, replica } = config as ReplicaConfig;
+    case MODES.PSA:
       return new PsaMongo(name, emitter, config as ReplicaConfig);
-    }
     case MODES.SHARD:
       return new ShardMongo(name, emitter, config as ShardConfig);
     default:
@@ -193,9 +210,18 @@ class PsaMongo extends MongoConnect {
 }
 
 class ShardMongo extends MongoConnect {
-  constructor(name: string, emitter: events.EventEmitter, shardConfig: ShardConfig) {
+  constructor(
+    name: string,
+    emitter: events.EventEmitter,
+    shardConfig: ShardConfig
+  ) {
     const { db, shard, auth } = shardConfig;
-    super(name, emitter, { db, getServers: shard.getServers, auth }, MODES.SHARD);
+    super(
+      name,
+      emitter,
+      { db, getServers: shard.getServers, auth },
+      MODES.SHARD
+    );
   }
 }
 
@@ -216,4 +242,4 @@ export function castToObjectId(value: string) {
   return ObjectId.createFromHexString(value);
 }
 
-export { ObjectId } from 'mongodb';
+export { ObjectId } from "mongodb";
