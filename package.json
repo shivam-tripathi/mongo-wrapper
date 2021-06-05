@@ -1,8 +1,12 @@
 {
-  "name": "@akshendra/mongo",
+  "name": "@quizizz/mongo",
   "version": "0.1.1",
   "description": "A simple wrapper around mongo native nodejs",
-  "main": "index.js",
+  "main": "dist/Mongo.js",
+  "types": "dist/Mongo.d.ts",
+  "files": [
+    "/dist"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -15,9 +19,11 @@
     "meta",
     "js"
   ],
-  "author": "Akshendra Pratap Singh",
   "license": "ISC",
   "dependencies": {
     "mongodb": "^3.0.3"
+  },
+  "devDependencies": {
+    "@types/mongodb": "^3.6.17"
   }
 }
