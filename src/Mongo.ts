@@ -6,6 +6,7 @@ import {
   Logger as MongoLogger,
   ObjectId,
   ReadPreference,
+  MongoServerSelectionError,
 } from "mongodb";
 
 export interface Server {
@@ -37,7 +38,6 @@ class MongoConnect implements Mongo {
   emitter: events.EventEmitter;
   mongoClient: MongoClient;
   client: Db;
-  connected: boolean;
   userConfig: UserConfig;
   config: MongoClientOptions;
   mode: string;
@@ -56,6 +56,7 @@ class MongoConnect implements Mongo {
       poolSize: 5,
       connectTimeoutMS: 30000,
       socketTimeoutMS: 30000,
+      serverSelectionTimeoutMS: 10000,
       useUnifiedTopology: true,
       connectWithNoPrimary: false,
       readPreference: ReadPreference.SECONDARY,
@@ -111,13 +112,24 @@ class MongoConnect implements Mongo {
   }
 
   async connect(): Promise<Mongo> {
-    if (this.client) {
-      return Promise.resolve(this);
+    let connected = false;
+    // Reconnection handler
+    while(!connected) {
+      try {
+        if (this.mongoClient) {
+          await this.mongoClient.close();
+        }
+        // Returns connection url with only healthy hosts
+        const connectionUrl = await this.getConnectionUrl();
+        this.mongoClient = new MongoClient(connectionUrl, this.config);
+        await this.mongoClient.connect();
+        connected = true;
+      } catch(err) {
+        this.error(err);
+      }
     }
-    const connectionUrl = await this.getConnectionUrl();
-    this.mongoClient = await MongoClient.connect(connectionUrl, this.config);
+
     this.client = this.mongoClient.db(this.userConfig.db);
-    this.connected = true;
     this.success(`Successfully connected in ${this.mode} mode`);
     MongoLogger.setLevel("info");
     MongoLogger.setCurrentLogger((msg, context) => {
@@ -127,13 +139,21 @@ class MongoConnect implements Mongo {
   }
 }
 
+export async function handleMongoError(err: Error, mongo: Mongo) {
+  if (err instanceof MongoServerSelectionError) {
+    await mongo.connect();
+    return null
+  }
+  return err;
+}
+
 export enum MODES {
-  STANDALONE = "standalone",
-  PSA = "psa",
+  SERVER = "server",
+  REPLSET = "replset",
   SHARD = "shard",
 }
 
-export interface StandaloneConfig {
+export interface ServerConfig {
   host: string;
   port: number;
   db: string;
@@ -161,13 +181,13 @@ export function MongoFactory(
   mode: string,
   name: string,
   emitter: events.EventEmitter,
-  config: StandaloneConfig | ReplicaConfig | ShardConfig
+  config: ServerConfig | ReplicaConfig | ShardConfig,
 ) {
   switch (mode) {
-    case MODES.STANDALONE:
-      return new StandaloneMongo(name, emitter, config as StandaloneConfig);
-    case MODES.PSA:
-      return new PsaMongo(name, emitter, config as ReplicaConfig);
+    case MODES.SERVER:
+      return new ServerMongo(name, emitter, config as ServerConfig);
+    case MODES.REPLSET:
+      return new ReplSet(name, emitter, config as ReplicaConfig);
     case MODES.SHARD:
       return new ShardMongo(name, emitter, config as ShardConfig);
     default:
@@ -175,11 +195,11 @@ export function MongoFactory(
   }
 }
 
-class StandaloneMongo extends MongoConnect {
+class ServerMongo extends MongoConnect {
   constructor(
     name: string,
     emitter: events.EventEmitter,
-    config: StandaloneConfig
+    config: ServerConfig,
   ) {
     const { db, host, port, auth } = config;
     const userConfig: UserConfig = {
@@ -187,11 +207,11 @@ class StandaloneMongo extends MongoConnect {
       getServers: () => Promise.resolve([{ host, port }]),
       auth,
     };
-    super(name, emitter, userConfig, MODES.STANDALONE);
+    super(name, emitter, userConfig, MODES.SERVER);
   }
 }
 
-class PsaMongo extends MongoConnect {
+class ReplSet extends MongoConnect {
   constructor(
     name: string,
     emitter: events.EventEmitter,
@@ -203,7 +223,7 @@ class PsaMongo extends MongoConnect {
       getServers: () => Promise.resolve(replica.servers),
       auth,
     };
-    super(name, emitter, config, MODES.PSA);
+    super(name, emitter, config, MODES.REPLSET);
     this.config.replicaSet = replica.name;
   }
 }

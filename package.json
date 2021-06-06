@@ -8,6 +8,7 @@
     "/dist"
   ],
   "scripts": {
+    "compile": "npx tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -21,7 +22,7 @@
   ],
   "license": "ISC",
   "dependencies": {
-    "mongodb": "^3.0.3"
+    "mongodb": "^3.6.9"
   },
   "devDependencies": {
     "@types/mongodb": "^3.6.17"

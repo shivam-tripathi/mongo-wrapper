@@ -26,7 +26,6 @@ declare class MongoConnect implements Mongo {
     emitter: events.EventEmitter;
     mongoClient: MongoClient;
     client: Db;
-    connected: boolean;
     userConfig: UserConfig;
     config: MongoClientOptions;
     mode: string;
@@ -37,12 +36,13 @@ declare class MongoConnect implements Mongo {
     private getConnectionUrl;
     connect(): Promise<Mongo>;
 }
+export declare function handleMongoError(err: Error, mongo: Mongo): Promise<Error>;
 export declare enum MODES {
-    STANDALONE = "standalone",
-    PSA = "psa",
+    SERVER = "server",
+    REPLSET = "replset",
     SHARD = "shard"
 }
-export interface StandaloneConfig {
+export interface ServerConfig {
     host: string;
     port: number;
     db: string;
@@ -63,11 +63,11 @@ export interface ShardConfig {
     };
     auth?: AuthConfig;
 }
-export declare function MongoFactory(mode: string, name: string, emitter: events.EventEmitter, config: StandaloneConfig | ReplicaConfig | ShardConfig): StandaloneMongo | PsaMongo | ShardMongo;
-declare class StandaloneMongo extends MongoConnect {
-    constructor(name: string, emitter: events.EventEmitter, config: StandaloneConfig);
+export declare function MongoFactory(mode: string, name: string, emitter: events.EventEmitter, config: ServerConfig | ReplicaConfig | ShardConfig): ServerMongo | ReplSet | ShardMongo;
+declare class ServerMongo extends MongoConnect {
+    constructor(name: string, emitter: events.EventEmitter, config: ServerConfig);
 }
-declare class PsaMongo extends MongoConnect {
+declare class ReplSet extends MongoConnect {
     constructor(name: string, emitter: events.EventEmitter, replicaConfig: ReplicaConfig);
 }
 declare class ShardMongo extends MongoConnect {
