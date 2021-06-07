@@ -118,26 +118,32 @@ class MongoConnect implements Mongo {
     // Reconnection handler
     let attempt = 1;
     while(!connected && attempt <= 10) {
+      console.log({ action: 'connect', attempt });
       try {
         if (this.mongoClient instanceof MongoClient) {
+          console.log('Closing existing mongo client');
           await this.mongoClient.close();
         }
+        this.mongoClient = null;
         // Returns connection url with only healthy hosts
         const connectionUrl = await this.getConnectionUrl();
+        console.log({ action: 'connecting', connectionUrl, attempt });
         this.mongoClient = new MongoClient(connectionUrl, this.config); // 10 second -> 100 seconds
         await this.mongoClient.connect();
         await new Promise(res => setTimeout(res, 2 * attempt * 1000)); //  110 seconds
         attempt++;
         connected = true;
       } catch(err) {
+        console.log({ err, isServerSelectionError: err instanceof MongoServerSelectionError });
         if (err instanceof MongoServerSelectionError) {
+          console.log({ err, action: 'error caught, reattempting' });
           this.error(err);
         } else {
           throw new Error(err);
         }
       }
     }
-
+    console.log({ action: 'connection successful, updating db' });
     this.client = this.mongoClient.db(this.userConfig.db);
     this.success(`Successfully connected in ${this.mode} mode`);
     MongoLogger.setLevel("info");
@@ -149,13 +155,24 @@ class MongoConnect implements Mongo {
 }
 
 export async function handleMongoError(err: Error, mongo: Mongo) {
+  console.log({ action: 'handleMongoErrorTriggered', err });
   if (err instanceof MongoServerSelectionError) {
+    console.log({ action: 'handleMongoErrorReconnecting', isMongoServerSelectionError: err instanceof MongoServerSelectionError, reconn: mongo.reconnecting });
     if (mongo.reconnecting === null) {
-      mongo.reconnecting = mongo.connect().then(() => mongo.reconnecting = null);
+      console.log({ action: 'handleMongoErrorReconnectingPromise' });
+      mongo.reconnecting = mongo.connect()
+        .then(() => {
+          console.log('Reconnection successfull');
+          return null;
+        })
+        .catch(err => console.log({ action: 'handleMongoErrorReconnFailed', err }));
     }
     await (mongo.reconnecting || Promise.resolve());
+    mongo.reconnecting = null;
+    console.log({ action: 'handleMongoErrorFin' });
     return null
   }
+  console.log({ action: 'handleMongoErrorInvalid, will throw' });
   return err;
 }
 
