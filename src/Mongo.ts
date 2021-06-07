@@ -117,32 +117,39 @@ class MongoConnect implements Mongo {
     let connected = false;
     // Reconnection handler
     let attempt = 1;
+    // Keep reference to old mongoClient, will need to close it later
+    const oldMongoClient = this.mongoClient;
     while(!connected && attempt <= 10) {
       console.log({ action: 'connect', attempt });
       try {
-        if (this.mongoClient instanceof MongoClient) {
-          console.log('Closing existing mongo client');
-          await this.mongoClient.close();
-        }
-        this.mongoClient = null;
         // Returns connection url with only healthy hosts
         const connectionUrl = await this.getConnectionUrl();
         console.log({ action: 'connecting', connectionUrl, attempt });
-        this.mongoClient = new MongoClient(connectionUrl, this.config); // 10 second -> 100 seconds
-        await this.mongoClient.connect();
-        await new Promise(res => setTimeout(res, 2 * attempt * 1000)); //  110 seconds
-        attempt++;
+        const mongoClient = new MongoClient(connectionUrl, this.config); // 10 second -> 100 seconds
+        await mongoClient.connect();
+        // Update this.mongoClient ONLY after a valid client has been established; else topology closed error will
+        // be thrown will is not being monitored/is valid error for reconnection
+        this.mongoClient = mongoClient;
         connected = true;
       } catch(err) {
         console.log({ err, isServerSelectionError: err instanceof MongoServerSelectionError });
         if (err instanceof MongoServerSelectionError) {
-          console.log({ err, action: 'error caught, reattempting' });
           this.error(err);
+          console.log({ err, action: 'error caught, reattempting' });
+          // In case there is failure to select the server, sleep for few seconds and then retry
+          await new Promise(res => setTimeout(res, 2 * attempt * 1000)); //  110 seconds
+          attempt++;
         } else {
           throw new Error(err);
         }
       }
     }
+
+    if (oldMongoClient instanceof MongoClient) {
+      console.log('Closing older mongo client');
+      await oldMongoClient.close();
+    }
+
     console.log({ action: 'connection successful, updating db' });
     this.client = this.mongoClient.db(this.userConfig.db);
     this.success(`Successfully connected in ${this.mode} mode`);
@@ -172,7 +179,7 @@ export async function handleMongoError(err: Error, mongo: Mongo) {
     console.log({ action: 'handleMongoErrorFin' });
     return null
   }
-  console.log({ action: 'handleMongoErrorInvalid, will throw' });
+  console.log({ action: 'handleMongoErrorInvalid, will throw', err });
   return err;
 }
 
