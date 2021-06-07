@@ -31,6 +31,7 @@ interface Mongo {
   success(message: string, data?: Record<string, any>): void;
   error(err: Error, data?: Record<string, any>): void;
   connect(): Promise<Mongo>;
+  reconnecting: Promise<Mongo>;
 }
 
 class MongoConnect implements Mongo {
@@ -41,6 +42,7 @@ class MongoConnect implements Mongo {
   userConfig: UserConfig;
   config: MongoClientOptions;
   mode: string;
+  reconnecting: Promise<Mongo>;
 
   constructor(
     name: string,
@@ -114,18 +116,25 @@ class MongoConnect implements Mongo {
   async connect(): Promise<Mongo> {
     let connected = false;
     // Reconnection handler
-    while(!connected) {
+    let attempt = 1;
+    while(!connected && attempt <= 10) {
       try {
-        if (this.mongoClient) {
+        if (this.mongoClient instanceof MongoClient) {
           await this.mongoClient.close();
         }
         // Returns connection url with only healthy hosts
         const connectionUrl = await this.getConnectionUrl();
-        this.mongoClient = new MongoClient(connectionUrl, this.config);
+        this.mongoClient = new MongoClient(connectionUrl, this.config); // 10 second -> 100 seconds
         await this.mongoClient.connect();
+        await new Promise(res => setTimeout(res, 2 * attempt * 1000)); //  110 seconds
+        attempt++;
         connected = true;
       } catch(err) {
-        this.error(err);
+        if (err instanceof MongoServerSelectionError) {
+          this.error(err);
+        } else {
+          throw new Error(err);
+        }
       }
     }
 
@@ -141,7 +150,10 @@ class MongoConnect implements Mongo {
 
 export async function handleMongoError(err: Error, mongo: Mongo) {
   if (err instanceof MongoServerSelectionError) {
-    await mongo.connect();
+    if (mongo.reconnecting === null) {
+      mongo.reconnecting = mongo.connect().then(() => mongo.reconnecting = null);
+    }
+    await (mongo.reconnecting || Promise.resolve());
     return null
   }
   return err;

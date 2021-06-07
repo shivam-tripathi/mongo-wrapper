@@ -20,6 +20,7 @@ interface Mongo {
     success(message: string, data?: Record<string, any>): void;
     error(err: Error, data?: Record<string, any>): void;
     connect(): Promise<Mongo>;
+    reconnecting: Promise<Mongo>;
 }
 declare class MongoConnect implements Mongo {
     name: string;
@@ -29,6 +30,7 @@ declare class MongoConnect implements Mongo {
     userConfig: UserConfig;
     config: MongoClientOptions;
     mode: string;
+    reconnecting: Promise<Mongo>;
     constructor(name: string, emitter: events.EventEmitter, userConfig: UserConfig, mode: string);
     log(message: string, data?: Record<string, any>): void;
     success(message: string, data?: Record<string, any>): void;
