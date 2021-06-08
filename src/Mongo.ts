@@ -98,12 +98,17 @@ class MongoConnect implements Mongo {
   }
 
   private async getConnectionUrl() {
-    const servers = await this.userConfig.getServers();
+    let servers = await this.userConfig.getServers();
     const joiner = ["mongodb://"];
 
     if (this.userConfig.auth) {
       const { username, password } = this.userConfig.auth;
       joiner.push(`${username}:${password}@`);
+    }
+
+    // If no active server, mock throw MongoServerSelection error
+    if (servers.length == 0) {
+      servers.push({ host: '127.0.0.1', port: 27017 });
     }
 
     joiner.push(
