@@ -99,6 +99,7 @@ class MongoConnect implements Mongo {
 
   private async getConnectionUrl() {
     let servers = await this.userConfig.getServers();
+    console.log('Gotten servers: ', servers);
     const joiner = ["mongodb://"];
 
     if (this.userConfig.auth) {
@@ -109,11 +110,14 @@ class MongoConnect implements Mongo {
     // If no active server, mock throw MongoServerSelection error
     if (servers.length == 0) {
       servers.push({ host: '127.0.0.1', port: 27017 });
+      console.log('Modifying servers', servers);
     }
 
     joiner.push(
       servers.map((server) => `${server.host}:${server.port}`).join(",")
     );
+
+    console.log({ joiner });
 
     return joiner.join("");
   }
@@ -142,7 +146,13 @@ class MongoConnect implements Mongo {
           this.error(err);
           console.log({ err, action: 'error caught, reattempting' });
           // In case there is failure to select the server, sleep for few seconds and then retry
-          await new Promise(res => setTimeout(res, 2 * attempt * 1000)); //  110 seconds
+          let count = 0;
+          let interval = setInterval(() => {
+            console.log({ action: 'waiting', count: count++, attempt });
+          }, 1000);
+          await new Promise(res => {
+            setTimeout(() => { res(0); clearInterval(interval); }, 2 * attempt * 1000)
+          }); //  110 seconds
           attempt++;
         } else {
           throw new Error(err);
