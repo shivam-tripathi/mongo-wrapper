@@ -99,7 +99,6 @@ class MongoConnect implements Mongo {
 
   private async getConnectionUrl() {
     let servers = await this.userConfig.getServers();
-    console.log('Gotten servers: ', servers);
     const joiner = ["mongodb://"];
 
     if (this.userConfig.auth) {
@@ -107,17 +106,14 @@ class MongoConnect implements Mongo {
       joiner.push(`${username}:${password}@`);
     }
 
-    // If no active server, mock throw MongoServerSelection error
+    // If no active server, mock throw MongoServerSelection error with invalid ip
     if (servers.length == 0) {
-      servers.push({ host: '127.0.0.1', port: 27017 });
-      console.log('Modifying servers', servers);
+      servers.push({ host: '255.255.255.255', port: 27017 });
     }
 
     joiner.push(
       servers.map((server) => `${server.host}:${server.port}`).join(",")
     );
-
-    console.log({ joiner });
 
     return joiner.join("");
   }
@@ -129,11 +125,9 @@ class MongoConnect implements Mongo {
     // Keep reference to old mongoClient, will need to close it later
     const oldMongoClient = this.mongoClient;
     while(!connected && attempt <= 10) {
-      console.log({ action: 'connect', attempt });
       try {
         // Returns connection url with only healthy hosts
         const connectionUrl = await this.getConnectionUrl();
-        console.log({ action: 'connecting', connectionUrl, attempt });
         const mongoClient = new MongoClient(connectionUrl, this.config); // 10 second -> 100 seconds
         await mongoClient.connect();
         // Update this.mongoClient ONLY after a valid client has been established; else topology closed error will
@@ -141,60 +135,40 @@ class MongoConnect implements Mongo {
         this.mongoClient = mongoClient;
         connected = true;
       } catch(err) {
-        console.log({ err, isServerSelectionError: err instanceof MongoServerSelectionError });
         if (err instanceof MongoServerSelectionError) {
           this.error(err);
-          console.log({ err, action: 'error caught, reattempting' });
-          // In case there is failure to select the server, sleep for few seconds and then retry
-          let count = 0;
-          let interval = setInterval(() => {
-            console.log({ action: 'waiting', count: count++, attempt });
-          }, 1000);
-          await new Promise(res => {
-            setTimeout(() => { res(0); clearInterval(interval); }, 2 * attempt * 1000)
-          }); //  110 seconds
           attempt++;
         } else {
           throw new Error(err);
         }
       }
     }
-
-    if (oldMongoClient instanceof MongoClient) {
-      console.log('Closing older mongo client');
-      await oldMongoClient.close();
-    }
-
-    console.log({ action: 'connection successful, updating db' });
     this.client = this.mongoClient.db(this.userConfig.db);
     this.success(`Successfully connected in ${this.mode} mode`);
     MongoLogger.setLevel("info");
     MongoLogger.setCurrentLogger((msg, context) => {
       this.log(msg, context);
     });
+    if (oldMongoClient instanceof MongoClient) {
+      // Do NOT wait. If you wait, this might block indefinitely due to the older server being out of action.
+      oldMongoClient.close();
+    }
     return this;
   }
 }
 
 export async function handleMongoError(err: Error, mongo: Mongo) {
-  console.log({ action: 'handleMongoErrorTriggered', err });
   if (err instanceof MongoServerSelectionError) {
-    console.log({ action: 'handleMongoErrorReconnecting', isMongoServerSelectionError: err instanceof MongoServerSelectionError, reconn: mongo.reconnecting });
     if (mongo.reconnecting === null) {
-      console.log({ action: 'handleMongoErrorReconnectingPromise' });
       mongo.reconnecting = mongo.connect()
         .then(() => {
-          console.log('Reconnection successfull');
           return null;
-        })
-        .catch(err => console.log({ action: 'handleMongoErrorReconnFailed', err }));
+        });
     }
     await (mongo.reconnecting || Promise.resolve());
     mongo.reconnecting = null;
-    console.log({ action: 'handleMongoErrorFin' });
     return null
   }
-  console.log({ action: 'handleMongoErrorInvalid, will throw', err });
   return err;
 }
 
