@@ -99,6 +99,7 @@ class MongoConnect implements Mongo {
 
   private async getConnectionUrl() {
     let servers = await this.userConfig.getServers();
+    console.log('Gotten servers: ', servers);
     const joiner = ["mongodb://"];
 
     if (this.userConfig.auth) {
@@ -115,6 +116,8 @@ class MongoConnect implements Mongo {
       servers.map((server) => `${server.host}:${server.port}`).join(",")
     );
 
+    console.log({ joiner });
+
     return joiner.join("");
   }
 
@@ -127,8 +130,8 @@ class MongoConnect implements Mongo {
     while(!connected && attempt <= 10) {
       try {
         // Returns connection url with only healthy hosts
-        const connectionUrl = await this.getConnectionUrl();
-        const mongoClient = new MongoClient(connectionUrl, this.config); // 10 second -> 100 seconds
+        const connectionUrl = await this.getConnectionUrl(); // C * 10 => 10C seconds
+        const mongoClient = new MongoClient(connectionUrl, this.config); // 10 * 10 => 100 seconds
         await mongoClient.connect();
         // Update this.mongoClient ONLY after a valid client has been established; else topology closed error will
         // be thrown will is not being monitored/is valid error for reconnection
@@ -137,6 +140,8 @@ class MongoConnect implements Mongo {
       } catch(err) {
         if (err instanceof MongoServerSelectionError) {
           this.error(err);
+          // 2 + 4 + 6 + 8 + 10 + 12 ... 20 => 2 * (1 + 2 + 3 + 4 ... 10) => 2 * ((10 * 11) / 2) => 110 seconds
+          await new Promise(res => setTimeout(res, 2 * attempt * 1000 ));
           attempt++;
         } else {
           throw new Error(err);
