@@ -7,6 +7,7 @@ import {
   ObjectId,
   ReadPreference,
   MongoServerSelectionError,
+  MongoNetworkError,
 } from "mongodb";
 
 export interface Server {
@@ -112,6 +113,10 @@ class MongoConnect implements Mongo {
     return joiner.join("");
   }
 
+  static isValidError(err: Error) {
+    return err instanceof MongoServerSelectionError || err instanceof MongoNetworkError;
+  }
+
   async connect(): Promise<Mongo> {
     let connected = false;
     // Reconnection handler
@@ -129,7 +134,7 @@ class MongoConnect implements Mongo {
         this.mongoClient = mongoClient;
         connected = true;
       } catch(err) {
-        if (err instanceof MongoServerSelectionError) {
+        if (MongoConnect.isValidError(err)) {
           this.error(err);
           // 2 + 4 + 6 + 8 + 10 + 12 ... 20 => 2 * (1 + 2 + 3 + 4 ... 10) => 2 * ((10 * 11) / 2) => 110 seconds
           await new Promise(res => setTimeout(res, 2 * attempt * 1000 ));
@@ -154,7 +159,7 @@ class MongoConnect implements Mongo {
 }
 
 export async function handleMongoError(err: Error, mongo: Mongo) {
-  if (err instanceof MongoServerSelectionError) {
+  if (MongoConnect.isValidError(err)) {
     if (mongo.reconnecting === null) {
       mongo.reconnecting = mongo.connect()
         .then(() => {
@@ -282,4 +287,4 @@ export function castToObjectId(value: string) {
   return ObjectId.createFromHexString(value);
 }
 
-export { ObjectId } from "mongodb";
+export { ObjectId };

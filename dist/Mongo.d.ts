@@ -36,6 +36,7 @@ declare class MongoConnect implements Mongo {
     success(message: string, data?: Record<string, any>): void;
     error(err: Error, data?: Record<string, any>): void;
     private getConnectionUrl;
+    static isValidError(err: Error): boolean;
     connect(): Promise<Mongo>;
 }
 export declare function handleMongoError(err: Error, mongo: Mongo): Promise<Error>;
@@ -77,4 +78,4 @@ declare class ShardMongo extends MongoConnect {
 }
 export declare function isValidObjectId(value: string | number | ObjectId): boolean;
 export declare function castToObjectId(value: string): ObjectId;
-export { ObjectId } from "mongodb";
+export { ObjectId };
