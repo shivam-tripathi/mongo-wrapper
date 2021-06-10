@@ -63,13 +63,7 @@ class MongoConnect implements Mongo {
       connectWithNoPrimary: false,
       readPreference: ReadPreference.SECONDARY,
     };
-    if (userConfig.auth) {
-      this.config.auth = {
-        user: userConfig.auth.username,
-        password: userConfig.auth.password,
-      };
-      this.config.authSource = userConfig.auth.authSource;
-    }
+    this.config.authSource = (userConfig.auth || {}).authSource;
     this.mode = mode;
   }
 
@@ -99,7 +93,6 @@ class MongoConnect implements Mongo {
 
   private async getConnectionUrl() {
     let servers = await this.userConfig.getServers();
-    console.log('Gotten servers: ', servers);
     const joiner = ["mongodb://"];
 
     if (this.userConfig.auth) {
@@ -115,8 +108,6 @@ class MongoConnect implements Mongo {
     joiner.push(
       servers.map((server) => `${server.host}:${server.port}`).join(",")
     );
-
-    console.log({ joiner });
 
     return joiner.join("");
   }
