@@ -8,6 +8,7 @@ import {
   ReadPreference,
   MongoServerSelectionError,
   MongoNetworkError,
+  MongoTimeoutError,
 } from "mongodb";
 
 export interface Server {
@@ -107,9 +108,9 @@ class MongoConnect implements Mongo {
       joiner.push(`${username}:${password}@`);
     }
 
-    // If no active server, mock throw MongoServerSelection error with invalid ip
+    // If no active servers, retry with old servers once again
     if (servers.length == 0) {
-      servers.push({ host: '255.255.255.255', port: 27017 });
+      servers = this.getHealthyHosts();
     }
 
     this.healthyHosts = servers;
@@ -122,7 +123,11 @@ class MongoConnect implements Mongo {
   }
 
   static isValidError(err: Error) {
-    return err instanceof MongoServerSelectionError || err instanceof MongoNetworkError;
+    return (
+      err instanceof MongoServerSelectionError ||
+      err instanceof MongoNetworkError ||
+      err instanceof MongoTimeoutError
+    );
   }
 
   async connect(): Promise<Mongo> {
@@ -131,7 +136,7 @@ class MongoConnect implements Mongo {
     let attempt = 1;
     // Keep reference to old mongoClient, will need to close it later
     const oldMongoClient = this.mongoClient;
-    while(!connected && attempt <= 10) {
+    while (!connected && attempt <= 10) {
       try {
         // Returns connection url with only healthy hosts
         const connectionUrl = await this.getConnectionUrl(); // C * 10 => 10C seconds
@@ -141,11 +146,11 @@ class MongoConnect implements Mongo {
         // be thrown will is not being monitored/is valid error for reconnection
         this.mongoClient = mongoClient;
         connected = true;
-      } catch(err) {
+      } catch (err) {
         if (MongoConnect.isValidError(err)) {
           this.error(err);
           // 2 + 4 + 6 + 8 + 10 + 12 ... 20 => 2 * (1 + 2 + 3 + 4 ... 10) => 2 * ((10 * 11) / 2) => 110 seconds
-          await new Promise(res => setTimeout(res, 2 * attempt * 1000 ));
+          await new Promise((res) => setTimeout(res, 2 * attempt * 1000));
           attempt++;
         } else {
           throw new Error(err);
