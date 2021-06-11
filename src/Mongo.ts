@@ -32,6 +32,7 @@ interface Mongo {
   success(message: string, data?: Record<string, any>): void;
   error(err: Error, data?: Record<string, any>): void;
   connect(): Promise<Mongo>;
+  getHealthyHosts(): Server[];
   reconnecting: Promise<Mongo>;
 }
 
@@ -44,6 +45,7 @@ class MongoConnect implements Mongo {
   config: MongoClientOptions;
   mode: string;
   reconnecting: Promise<Mongo>;
+  private healthyHosts: Server[];
 
   constructor(
     name: string,
@@ -92,6 +94,10 @@ class MongoConnect implements Mongo {
     });
   }
 
+  getHealthyHosts() {
+    return this.healthyHosts || [];
+  }
+
   private async getConnectionUrl() {
     let servers = await this.userConfig.getServers();
     const joiner = ["mongodb://"];
@@ -105,6 +111,8 @@ class MongoConnect implements Mongo {
     if (servers.length == 0) {
       servers.push({ host: '255.255.255.255', port: 27017 });
     }
+
+    this.healthyHosts = servers;
 
     joiner.push(
       servers.map((server) => `${server.host}:${server.port}`).join(",")
