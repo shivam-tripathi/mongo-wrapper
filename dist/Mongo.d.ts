@@ -21,6 +21,7 @@ export interface Mongo {
     error(err: Error, data?: Record<string, any>): void;
     connect(): Promise<Mongo>;
     getHealthyHosts(): Server[];
+    getClient(): MongoClient;
     reconnecting: Promise<Mongo>;
 }
 export declare class MongoConnect implements Mongo {
@@ -40,6 +41,7 @@ export declare class MongoConnect implements Mongo {
     getHealthyHosts(): Server[];
     private getConnectionUrl;
     static isValidError(err: Error): boolean;
+    getClient(): MongoClient;
     connect(): Promise<Mongo>;
 }
 export declare function handleMongoError(err: Error, mongo: Mongo): Promise<Error>;

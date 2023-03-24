@@ -34,6 +34,7 @@ export interface Mongo {
   error(err: Error, data?: Record<string, any>): void;
   connect(): Promise<Mongo>;
   getHealthyHosts(): Server[];
+  getClient(): MongoClient;
   reconnecting: Promise<Mongo>;
 }
 
@@ -128,6 +129,10 @@ export class MongoConnect implements Mongo {
       err instanceof MongoNetworkError ||
       err instanceof MongoTimeoutError
     );
+  }
+
+  getClient(): MongoClient {
+      return this.mongoClient;
   }
 
   async connect(): Promise<Mongo> {
