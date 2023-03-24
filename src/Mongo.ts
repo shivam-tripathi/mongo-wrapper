@@ -28,7 +28,7 @@ export interface UserConfig {
   getServers(): Promise<Server[]>;
 }
 
-interface Mongo {
+export interface Mongo {
   log(message: string, data?: Record<string, any>): void;
   success(message: string, data?: Record<string, any>): void;
   error(err: Error, data?: Record<string, any>): void;
@@ -37,7 +37,7 @@ interface Mongo {
   reconnecting: Promise<Mongo>;
 }
 
-class MongoConnect implements Mongo {
+export class MongoConnect implements Mongo {
   name: string;
   emitter: events.EventEmitter;
   mongoClient: MongoClient;
@@ -217,11 +217,11 @@ export interface ShardConfig {
 }
 
 export function MongoFactory(
-  mode: string,
+  mode: MODES,
   name: string,
   emitter: events.EventEmitter,
   config: ServerConfig | ReplicaConfig | ShardConfig,
-) {
+): Mongo {
   switch (mode) {
     case MODES.SERVER:
       return new ServerMongo(name, emitter, config as ServerConfig);
@@ -283,6 +283,17 @@ class ShardMongo extends MongoConnect {
   }
 }
 
+
+export function MongoFactoryAuto(name: string, emitter: events.EventEmitter, config: MongoConfig) {
+  if ((config as ReplicaConfig).replica) {
+    return MongoFactory(MODES.REPLSET, name, emitter, config);
+  } else if ((config as ShardConfig).shard) {
+    return MongoFactory(MODES.SHARD, name, emitter, config);
+  } else {
+    return MongoFactory(MODES.SERVER, name, emitter, config);
+  }
+}
+
 export function isValidObjectId(value: string | number | ObjectId) {
   const regex = /[0-9a-f]{24}/;
   const matched = String(value).match(regex);
@@ -300,4 +311,7 @@ export function castToObjectId(value: string) {
   return ObjectId.createFromHexString(value);
 }
 
-export { ObjectId };
+export type MongoConfig = ServerConfig | ReplicaConfig | ShardConfig;
+
+export { ObjectId, MongoClient, Db };
+
