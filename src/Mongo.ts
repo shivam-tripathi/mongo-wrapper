@@ -25,6 +25,7 @@ export interface AuthConfig {
 export interface UserConfig {
   db: string;
   auth?: AuthConfig;
+  applicationName?: string;
   getServers(): Promise<Server[]>;
 }
 
@@ -120,7 +121,12 @@ export class MongoConnect implements Mongo {
       servers.map((server) => `${server.host}:${server.port}`).join(",")
     );
 
-    return joiner.join("");
+    const params = new URLSearchParams();
+    if (this.userConfig.applicationName) {
+      params.set("appName", this.userConfig.applicationName);
+    }
+
+    return joiner.join("") + (params.size > 0 ? "?" + params.toString() : "");
   }
 
   static isValidError(err: Error) {
