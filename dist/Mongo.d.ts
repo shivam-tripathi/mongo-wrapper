@@ -15,15 +15,16 @@ export interface UserConfig {
     auth?: AuthConfig;
     getServers(): Promise<Server[]>;
 }
-interface Mongo {
+export interface Mongo {
     log(message: string, data?: Record<string, any>): void;
     success(message: string, data?: Record<string, any>): void;
     error(err: Error, data?: Record<string, any>): void;
     connect(): Promise<Mongo>;
     getHealthyHosts(): Server[];
+    getClient(): MongoClient;
     reconnecting: Promise<Mongo>;
 }
-declare class MongoConnect implements Mongo {
+export declare class MongoConnect implements Mongo {
     name: string;
     emitter: events.EventEmitter;
     mongoClient: MongoClient;
@@ -40,6 +41,7 @@ declare class MongoConnect implements Mongo {
     getHealthyHosts(): Server[];
     private getConnectionUrl;
     static isValidError(err: Error): boolean;
+    getClient(): MongoClient;
     connect(): Promise<Mongo>;
 }
 export declare function handleMongoError(err: Error, mongo: Mongo): Promise<Error>;
@@ -69,16 +71,9 @@ export interface ShardConfig {
     };
     auth?: AuthConfig;
 }
-export declare function MongoFactory(mode: string, name: string, emitter: events.EventEmitter, config: ServerConfig | ReplicaConfig | ShardConfig): ServerMongo | ReplSet | ShardMongo;
-declare class ServerMongo extends MongoConnect {
-    constructor(name: string, emitter: events.EventEmitter, config: ServerConfig);
-}
-declare class ReplSet extends MongoConnect {
-    constructor(name: string, emitter: events.EventEmitter, replicaConfig: ReplicaConfig);
-}
-declare class ShardMongo extends MongoConnect {
-    constructor(name: string, emitter: events.EventEmitter, shardConfig: ShardConfig);
-}
+export declare function MongoFactory(mode: MODES, name: string, emitter: events.EventEmitter, config: ServerConfig | ReplicaConfig | ShardConfig): Mongo;
+export declare function MongoFactoryAuto(name: string, emitter: events.EventEmitter, config: MongoConfig): Mongo;
 export declare function isValidObjectId(value: string | number | ObjectId): boolean;
 export declare function castToObjectId(value: string): ObjectId;
-export { ObjectId };
+export type MongoConfig = ServerConfig | ReplicaConfig | ShardConfig;
+export { ObjectId, MongoClient, Db };
