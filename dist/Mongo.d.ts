@@ -55,6 +55,7 @@ export interface ServerConfig {
     port: number;
     db: string;
     auth?: AuthConfig;
+    applicationName?: string;
 }
 export interface ReplicaConfig {
     db: string;
@@ -63,6 +64,7 @@ export interface ReplicaConfig {
         servers: Server[];
     };
     auth?: AuthConfig;
+    applicationName?: string;
 }
 export interface ShardConfig {
     db: string;
@@ -70,6 +72,7 @@ export interface ShardConfig {
         getServers: () => Promise<Server[]>;
     };
     auth?: AuthConfig;
+    applicationName?: string;
 }
 export declare function MongoFactory(mode: MODES, name: string, emitter: events.EventEmitter, config: ServerConfig | ReplicaConfig | ShardConfig): Mongo;
 export declare function MongoFactoryAuto(name: string, emitter: events.EventEmitter, config: MongoConfig): Mongo;
