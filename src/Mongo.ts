@@ -3,12 +3,11 @@ import {
   Db,
   MongoClient,
   MongoClientOptions,
-  Logger as MongoLogger,
   ObjectId,
   ReadPreference,
   MongoServerSelectionError,
   MongoNetworkError,
-  MongoTimeoutError,
+  MongoNetworkTimeoutError,
 } from "mongodb";
 
 export interface Server {
@@ -28,16 +27,17 @@ export interface UserConfig {
   getServers(): Promise<Server[]>;
 }
 
-interface Mongo {
+export interface Mongo {
   log(message: string, data?: Record<string, any>): void;
   success(message: string, data?: Record<string, any>): void;
   error(err: Error, data?: Record<string, any>): void;
   connect(): Promise<Mongo>;
   getHealthyHosts(): Server[];
+  getClient(): MongoClient;
   reconnecting: Promise<Mongo>;
 }
 
-class MongoConnect implements Mongo {
+export class MongoConnect implements Mongo {
   name: string;
   emitter: events.EventEmitter;
   mongoClient: MongoClient;
@@ -59,13 +59,11 @@ class MongoConnect implements Mongo {
     this.userConfig = userConfig;
     this.config = {
       keepAlive: true,
-      poolSize: 5,
+      maxPoolSize: 5,
       connectTimeoutMS: 30000,
       socketTimeoutMS: 30000,
       serverSelectionTimeoutMS: 10000,
-      useUnifiedTopology: true,
-      connectWithNoPrimary: false,
-      readPreference: ReadPreference.SECONDARY,
+      readPreference: ReadPreference.SECONDARY_PREFERRED,
     };
     this.config.authSource = (userConfig.auth || {}).authSource;
     this.mode = mode;
@@ -119,15 +117,24 @@ class MongoConnect implements Mongo {
       servers.map((server) => `${server.host}:${server.port}`).join(",")
     );
 
-    return joiner.join("");
+    const params = new URLSearchParams();
+    if (this.name) {
+      params.set("appName", this.name);
+    }
+
+    return joiner.join("") + (params.size > 0 ? "?" + params.toString() : "");
   }
 
   static isValidError(err: Error) {
     return (
       err instanceof MongoServerSelectionError ||
       err instanceof MongoNetworkError ||
-      err instanceof MongoTimeoutError
+      err instanceof MongoNetworkTimeoutError
     );
+  }
+
+  getClient(): MongoClient {
+    return this.mongoClient;
   }
 
   async connect(): Promise<Mongo> {
@@ -142,6 +149,7 @@ class MongoConnect implements Mongo {
         const connectionUrl = await this.getConnectionUrl(); // C * 10 => 10C seconds
         const mongoClient = new MongoClient(connectionUrl, this.config); // 10 * 10 => 100 seconds
         await mongoClient.connect();
+
         // Update this.mongoClient ONLY after a valid client has been established; else topology closed error will
         // be thrown will is not being monitored/is valid error for reconnection
         this.mongoClient = mongoClient;
@@ -159,9 +167,20 @@ class MongoConnect implements Mongo {
     }
     this.client = this.mongoClient.db(this.userConfig.db);
     this.success(`Successfully connected in ${this.mode} mode`);
-    MongoLogger.setLevel("info");
-    MongoLogger.setCurrentLogger((msg, context) => {
-      this.log(msg, context);
+    this.mongoClient.on('commandStarted', (event) => {
+      this.log('Command Started:', event);
+      // Add the comment to any command that supports it
+      if (event.command && typeof event.command === 'object') {
+        event.command.comment = `AppName: ${this.name}`;
+      }
+    });
+
+    this.mongoClient.on('commandSucceeded', (event) => {
+      this.log('Command Succeeded:', event);
+    });
+    
+    this.mongoClient.on('commandFailed', (event) => {
+      this.log('Command Failed:', event);
     });
     if (oldMongoClient instanceof MongoClient) {
       // Do NOT wait. If you wait, this might block indefinitely due to the older server being out of action.
@@ -217,11 +236,11 @@ export interface ShardConfig {
 }
 
 export function MongoFactory(
-  mode: string,
+  mode: MODES,
   name: string,
   emitter: events.EventEmitter,
   config: ServerConfig | ReplicaConfig | ShardConfig,
-) {
+): Mongo {
   switch (mode) {
     case MODES.SERVER:
       return new ServerMongo(name, emitter, config as ServerConfig);
@@ -283,6 +302,17 @@ class ShardMongo extends MongoConnect {
   }
 }
 
+
+export function MongoFactoryAuto(name: string, emitter: events.EventEmitter, config: MongoConfig) {
+  if ((config as ReplicaConfig).replica) {
+    return MongoFactory(MODES.REPLSET, name, emitter, config);
+  } else if ((config as ShardConfig).shard) {
+    return MongoFactory(MODES.SHARD, name, emitter, config);
+  } else {
+    return MongoFactory(MODES.SERVER, name, emitter, config);
+  }
+}
+
 export function isValidObjectId(value: string | number | ObjectId) {
   const regex = /[0-9a-f]{24}/;
   const matched = String(value).match(regex);
@@ -300,4 +330,7 @@ export function castToObjectId(value: string) {
   return ObjectId.createFromHexString(value);
 }
 
-export { ObjectId };
+export type MongoConfig = ServerConfig | ReplicaConfig | ShardConfig;
+
+export { ObjectId, MongoClient, Db };
+
