@@ -150,13 +150,6 @@ export class MongoConnect implements Mongo {
         const mongoClient = new MongoClient(connectionUrl, this.config); // 10 * 10 => 100 seconds
         await mongoClient.connect();
 
-        mongoClient.on('commandStarted', (event) => {
-          // Add the comment to any command that supports it
-          if (event.command && typeof event.command === 'object') {
-            event.command.comment = `AppName: ${this.name}`;
-          }
-        });
-
         // Update this.mongoClient ONLY after a valid client has been established; else topology closed error will
         // be thrown will is not being monitored/is valid error for reconnection
         this.mongoClient = mongoClient;
