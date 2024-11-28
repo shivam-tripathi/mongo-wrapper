@@ -25,6 +25,7 @@ export interface AuthConfig {
 export interface UserConfig {
   db: string;
   auth?: AuthConfig;
+  applicationName?: string;
   getServers(): Promise<Server[]>;
 }
 
@@ -120,7 +121,12 @@ export class MongoConnect implements Mongo {
       servers.map((server) => `${server.host}:${server.port}`).join(",")
     );
 
-    return joiner.join("");
+    const params = new URLSearchParams();
+    if (this.userConfig.applicationName) {
+      params.set("appName", this.userConfig.applicationName);
+    }
+
+    return joiner.join("") + (params.size > 0 ? "?" + params.toString() : "");
   }
 
   static isValidError(err: Error) {
@@ -202,6 +208,7 @@ export interface ServerConfig {
   port: number;
   db: string;
   auth?: AuthConfig;
+  applicationName?: string;
 }
 
 export interface ReplicaConfig {
@@ -211,6 +218,7 @@ export interface ReplicaConfig {
     servers: Server[];
   };
   auth?: AuthConfig;
+  applicationName?: string;
 }
 
 export interface ShardConfig {
@@ -219,6 +227,7 @@ export interface ShardConfig {
     getServers: () => Promise<Server[]>;
   };
   auth?: AuthConfig;
+  applicationName?: string;
 }
 
 export function MongoFactory(
@@ -245,11 +254,12 @@ class ServerMongo extends MongoConnect {
     emitter: events.EventEmitter,
     config: ServerConfig,
   ) {
-    const { db, host, port, auth } = config;
+    const { db, host, port, auth, applicationName } = config;
     const userConfig: UserConfig = {
       db,
       getServers: () => Promise.resolve([{ host, port }]),
       auth,
+      applicationName,
     };
     super(name, emitter, userConfig, MODES.SERVER);
   }
@@ -261,11 +271,12 @@ class ReplSet extends MongoConnect {
     emitter: events.EventEmitter,
     replicaConfig: ReplicaConfig
   ) {
-    const { db, replica, auth } = replicaConfig;
+    const { db, replica, auth, applicationName } = replicaConfig;
     const config: UserConfig = {
       db: db,
       getServers: () => Promise.resolve(replica.servers),
       auth,
+      applicationName,
     };
     super(name, emitter, config, MODES.REPLSET);
     this.config.replicaSet = replica.name;
@@ -278,11 +289,11 @@ class ShardMongo extends MongoConnect {
     emitter: events.EventEmitter,
     shardConfig: ShardConfig
   ) {
-    const { db, shard, auth } = shardConfig;
+    const { db, shard, auth, applicationName } = shardConfig;
     super(
       name,
       emitter,
-      { db, getServers: shard.getServers, auth },
+      { db, getServers: shard.getServers, auth, applicationName },
       MODES.SHARD
     );
   }
